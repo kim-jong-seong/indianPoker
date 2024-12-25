@@ -4,5 +4,12 @@
 # AWS - EC2 - 인스턴스 정보
 https://us-east-2.console.aws.amazon.com/ec2/home?region=us-east-2#Instances:
 
+## 재부팅 시 public IP로 변경
+sudo nano /etc/nginx/conf.d/game.conf
 
-http://18.219.116.255:3000/
+# pm2로 서버 시작
+cd game-server
+pm2 start server.js
+
+# link
+http://[public IP]:3000/

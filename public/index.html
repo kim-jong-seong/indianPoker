@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인디언 포커 시뮬레이터</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        #app {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .info-box {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-top: 20px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+        .info-box h3 {
+            margin-top: 0;
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .info-box ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .info-box li {
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+        .game-notes {
+            margin-top: 15px;
+            color: #666;
+        }
+        .game-notes p {
+            margin: 5px 0;
+        }
+        #user-list {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 20px;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        input {
+            padding: 8px;
+            flex-grow: 1;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .user-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .name-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .badge-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .host-badge {
+            background-color: #ff9800;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .me-badge {
+            background-color: #4CAF50;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .die-badge {
+            background-color: #ff4444;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .number-badge {
+            background-color: #2196F3;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .number-badge.died {
+            background-color: #808080;
+        }
+        .died-user {
+            text-decoration: line-through;
+        }
+        #game-controls {
+            margin: 20px 0;
+            text-align: center;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        #die-btn {
+            background-color: #f44336;
+        }
+        #die-btn:hover {
+            background-color: #da190b;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="join-screen">
+            <div class="input-container">
+                <input type="text" id="nickname-input" placeholder="닉네임을 입력하세요">
+                <button onclick="join()">입장</button>
+            </div>
+        </div>
+        
+        <div id="chat-screen" style="display: none;">
+            <div id="game-rules" class="info-box">
+                <h3>게임 규칙</h3>
+                <ol>
+                    <li>게임시작 후 자신을 포함한 모든 유저는 숫자 하나를 부여받습니다. (숫자 중복 가능)</li>
+                    <li>유저들은 본인의 숫자를 알 수 없습니다.</li>
+                    <li>생존한 유저들 중 자신의 숫자가 가장 높을 것 같으면 가만히 있으면 됩니다.</li>
+                    <li>생존한 유저들 중 자신의 숫자보다 높은 수가 있을 것 같으면 '다이' 버튼을 누릅니다.</li>
+                    <li>게임 종료시점에 가장 높은 수를 가진 유저가 승리합니다.</li>
+                </ol>
+                <div class="game-notes">
+                    <p>※ 공동 우승이 가능합니다.</p>
+                    <p>※ 자신의 숫자가 '10'일 경우 죽었다면 벌칙의 2배를 받습니다.</p>
+                </div>
+            </div>
+
+            <div id="user-list">
+                <h3>접속자 목록</h3>
+                <div id="users"></div>
+            </div>
+
+            <div id="game-controls">
+                <button id="start-game-btn" onclick="startGame()" style="display: none;">게임 시작</button>
+                <button id="end-game-btn" onclick="endGame()" style="display: none;">게임 종료</button>
+                <button id="die-btn" onclick="dieGame()" style="display: none;">다이</button>
+            </div>
+            
+            <div id="my-number" style="text-align: center; margin-top: 10px; font-size: 1.2em; font-weight: bold;"></div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let myNickname = '';
+        let isHost = false;
+        let gameStarted = false;
+        let connectedUsers = {};
+        let isDied = false;
+
+        // DOM 요소들
+        const joinScreen = document.getElementById('join-screen');
+        const chatScreen = document.getElementById('chat-screen');
+        const nicknameInput = document.getElementById('nickname-input');
+        const usersList = document.getElementById('users');
+        const startGameBtn = document.getElementById('start-game-btn');
+        const endGameBtn = document.getElementById('end-game-btn');
+        const dieBtn = document.getElementById('die-btn');
+
+        // 입장 처리
+        function join() {
+            myNickname = nicknameInput.value.trim();
+            if (myNickname) {
+                socket.emit('join', myNickname);
+                joinScreen.style.display = 'none';
+                chatScreen.style.display = 'block';
+            }
+        }
+
+        // 게임 시작
+        function startGame() {
+            if (isHost && !gameStarted) {
+                socket.emit('startGame');
+            }
+        }
+
+        // 게임 종료
+        function endGame() {
+            if (isHost && gameStarted) {
+                socket.emit('endGame');
+            }
+        }
+
+        // 다이
+        function dieGame() {
+            if (gameStarted && !isDied) {
+                socket.emit('die');
+                isDied = true;
+            }
+        }
+
+        // Enter 키 이벤트 처리
+        nicknameInput?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                join();
+            }
+        });
+
+        // 유저 목록 업데이트
+        function updateUserList(users, numbers = {}, diedUsers = {}, gameEnded = false) {
+            usersList.innerHTML = '';
+            const myNumber = document.getElementById('my-number');
+            
+            users.forEach(user => {
+                const div = document.createElement('div');
+                div.className = 'user-item';
+
+                const nameContainer = document.createElement('div');
+                nameContainer.className = 'name-container';
+
+                // 방장 뱃지
+                if (user.isHost) {
+                    const hostBadge = document.createElement('span');
+                    hostBadge.className = 'host-badge';
+                    hostBadge.textContent = '방장';
+                    nameContainer.appendChild(hostBadge);
+                }
+
+                // '나' 뱃지
+                if (user.id === socket.id) {
+                    const meBadge = document.createElement('span');
+                    meBadge.className = 'me-badge';
+                    meBadge.textContent = '나';
+                    nameContainer.appendChild(meBadge);
+                }
+
+                // 사용자 이름
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = user.nickname;
+                if (diedUsers[user.id]) {
+                    nameSpan.className = 'died-user';
+                }
+                nameContainer.appendChild(nameSpan);
+
+                // 뱃지들을 담을 컨테이너
+                const badgeContainer = document.createElement('div');
+                badgeContainer.className = 'badge-container';
+                
+                // 숫자 뱃지
+                if (numbers[user.id] !== undefined && (gameEnded || user.id !== socket.id)) {
+                    const numberBadge = document.createElement('span');
+                    numberBadge.className = `number-badge ${diedUsers[user.id] ? 'died' : ''}`;
+                    numberBadge.textContent = numbers[user.id];
+                    badgeContainer.appendChild(numberBadge);
+                }
+
+                // 다이 뱃지
+                if (diedUsers[user.id]) {
+                    const dieBadge = document.createElement('span');
+                    dieBadge.className = 'die-badge';
+                    dieBadge.textContent = '다이';
+                    badgeContainer.appendChild(dieBadge);
+                }
+
+                div.appendChild(nameContainer);
+                div.appendChild(badgeContainer);
+                usersList.appendChild(div);
+            });
+
+            // 게임 종료시 자신의 숫자 표시
+            if (gameEnded && numbers[socket.id]) {
+                myNumber.textContent = `내 숫자: ${numbers[socket.id]}`;
+                if (diedUsers[socket.id]) {
+                    myNumber.style.color = '#808080';
+                } else {
+                    myNumber.style.color = '';
+                }
+            } else {
+                myNumber.textContent = '';
+            }
+        }
+
+        // 소켓 이벤트 리스너들
+        socket.on('userList', (data) => {
+            const { users, gameState } = data;
+            connectedUsers = users.reduce((acc, user) => {
+                acc[user.id] = user;
+                return acc;
+            }, {});
+            
+            updateUserList(users, gameState.numbers, gameState.diedUsers);
+            
+            // 방장 상태 및 게임 상태 업데이트
+            const currentUser = users.find(user => user.id === socket.id);
+            if (currentUser) {
+                isHost = currentUser.isHost;
+                gameStarted = gameState.isStarted;
+                isDied = gameState.diedUsers?.[socket.id] || false;
+                
+                // 버튼 표시 상태 업데이트
+                startGameBtn.style.display = isHost ? 'inline-block' : 'none';
+                endGameBtn.style.display = isHost && gameStarted ? 'inline-block' : 'none';
+                dieBtn.style.display = gameStarted && !isDied ? 'inline-block' : 'none';
+            }
+        });
+
+        socket.on('gameStarted', (data) => {
+            gameStarted = true;
+            isDied = false;
+            if (isHost) {
+                startGameBtn.style.display = 'none';
+                endGameBtn.style.display = 'inline-block';
+            }
+            dieBtn.style.display = 'inline-block';
+            updateUserList(Object.values(connectedUsers), data.numbers, {});
+        });
+
+        socket.on('gameEnded', (data) => {
+            gameStarted = false;
+            isDied = false;
+            if (isHost) {
+                startGameBtn.style.display = 'inline-block';
+                endGameBtn.style.display = 'none';
+            }
+            dieBtn.style.display = 'none';
+            updateUserList(Object.values(connectedUsers), data.numbers, data.diedUsers, true);
+        });
+
+        socket.on('updateDieStatus', (data) => {
+            updateUserList(Object.values(connectedUsers), data.numbers, data.diedUsers);
+        });
+
+        socket.on('userJoined', (user) => {
+            connectedUsers[user.id] = user;
+        });
+
+        socket.on('userLeft', (user) => {
+            delete connectedUsers[user.id];
+        });
+
+        socket.on('newHost', (newHostId) => {
+            if (newHostId === socket.id) {
+                isHost = true;
+                startGameBtn.style.display = 'inline-block';
+                if (gameStarted) {
+                    endGameBtn.style.display = 'inline-block';
+                }
+            }
+        });
+    </script>
+</body>
+</html>

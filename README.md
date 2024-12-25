@@ -9,6 +9,7 @@ sudo nano /etc/nginx/conf.d/game.conf
 
 # pm2로 서버 시작
 cd game-server
+
 pm2 start server.js
 
 # link
